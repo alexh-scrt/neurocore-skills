@@ -1,0 +1,98 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neurocore-skill-math"
+version = "0.1.0"
+description = "Math-proof toolchain skills for NeuroCore: CAS, SMT, ATP, and formal proof assistants"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.13"
+authors = [{ name = "NeuroCore Contributors" }]
+keywords = ["neurocore", "skill", "math", "proof", "sympy", "z3", "lean", "theorem-proving", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "neurocore-ai>=0.4.0",
+    "sympy>=1.12",
+    "mpmath>=1.3",
+    "z3-solver>=4.12",
+]
+
+[project.optional-dependencies]
+# Optional backends; the matching skills detect availability and degrade gracefully.
+cvc5 = ["cvc5>=1.1"]
+numeric = ["numpy>=1.26", "scipy>=1.11", "networkx>=3.0"]
+dev = ["pytest>=9.0.2", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.8"]
+
+[project.entry-points."neurocore.skills"]
+# Group 1 — problem preparation (LLM)
+math_problem_parser = "neurocore_skill_math:MathProblemParserSkill"
+math_domain_classifier = "neurocore_skill_math:MathDomainClassifierSkill"
+math_statement_normalizer = "neurocore_skill_math:MathStatementNormalizerSkill"
+# Group 2 — symbolic / numeric / CAS
+sympy_simplify = "neurocore_skill_math:SympySimplifySkill"
+sympy_solve = "neurocore_skill_math:SympySolveSkill"
+sympy_calculus = "neurocore_skill_math:SympyCalculusSkill"
+mpmath_high_precision_check = "neurocore_skill_math:MpmathHighPrecisionCheckSkill"
+sagemath_compute = "neurocore_skill_math:SagemathComputeSkill"
+pari_gp_number_theory = "neurocore_skill_math:PariGpNumberTheorySkill"
+gap_group_theory = "neurocore_skill_math:GapGroupTheorySkill"
+# Group 3 — counterexample / SMT
+z3_smt_check = "neurocore_skill_math:Z3SmtCheckSkill"
+cvc5_smt_check = "neurocore_skill_math:Cvc5SmtCheckSkill"
+mace4_countermodel = "neurocore_skill_math:Mace4CountermodelSkill"
+# Group 4 — automated proof search (ATP)
+vampire_prove_tptp = "neurocore_skill_math:VampireProveTptpSkill"
+eprover_prove_tptp = "neurocore_skill_math:EproverProveTptpSkill"
+prover9_prove = "neurocore_skill_math:Prover9ProveSkill"
+# Group 4/5 — planning, retrieval (LLM)
+llm_proof_planner = "neurocore_skill_math:LlmProofPlannerSkill"
+theorem_retriever = "neurocore_skill_math:TheoremRetrieverSkill"
+# Group 5 — formalization (Lean / Isabelle / Coq)
+lean4_formalize_statement = "neurocore_skill_math:Lean4FormalizeStatementSkill"
+lean4_check = "neurocore_skill_math:Lean4CheckSkill"
+lean4_repair = "neurocore_skill_math:Lean4RepairSkill"
+isabelle_check_theory = "neurocore_skill_math:IsabelleCheckTheorySkill"
+coq_check = "neurocore_skill_math:CoqCheckSkill"
+# Group 6 — reporting
+proof_report_builder = "neurocore_skill_math:ProofReportBuilderSkill"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/neurocore_skill_math"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/neurocore_skill_math/", "tests/", "blueprints/", "scripts/", "README.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Compact one-line setup (`ctx = FlowContext(); ctx.set(...)`) is fine in tests.
+"tests/*" = ["E702"]
+
+[tool.mypy]
+python_version = "3.13"
+# Math backends (sympy/mpmath/z3/cvc5) ship no type stubs.
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]

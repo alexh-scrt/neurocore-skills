@@ -1,0 +1,90 @@
+# lean-first-math-worker — a focused proof-validation loop (design doc §6).
+#
+#   parse → (sympy explore + z3 counterexample) → plan → retrieve premises
+#         → formalize in Lean → check → (repair loop) → report
+#
+# Run:
+#   neurocore run blueprints/lean-first-math-worker.flow.yaml \
+#     --data problem="Every integer n > 1 has a prime divisor."
+#
+# ROUTING: with neurocore-ai>=0.4.0 (flowengine>=0.6.0), graph flows that use
+# edge ports/conditions or cycles route through flowengine's GraphExecutor, so the
+# z3 counterexample early-exit and the lean check→repair loop execute as drawn.
+# LLM skills require an `llm:` provider in neurocore.yaml; unavailable external
+# tools degrade to status=tool_unavailable (run `python -m neurocore_skill_math.check`).
+name: lean-first-math-worker
+version: "0.1.0"
+description: >
+  Parse a problem, explore with SymPy, search for a counterexample with Z3, plan a
+  proof, retrieve premises, formalize and check in Lean 4 (with a repair loop), and
+  emit a proof report.
+components:
+  - name: parse
+    type: math_problem_parser
+    config: {input_key: problem, output_key: math.parsed}
+  - name: sympy
+    type: sympy_simplify
+    config: {input_key: math.parsed, output_key: evidence.sympy, timeout_seconds: 15}
+  - name: z3
+    type: z3_smt_check
+    config: {input_key: math.parsed, output_key: counterexamples.z3, timeout_seconds: 20}
+  - name: planner
+    type: llm_proof_planner
+    config: {input_key: math.parsed, output_key: proof.strategy}
+  - name: retrieve
+    type: theorem_retriever
+    config: {input_key: proof.strategy, output_key: proof.premises, backends: [lean_mathlib]}
+  - name: formalize
+    type: lean4_formalize_statement
+    config:
+      input_key: math.parsed
+      strategy_key: proof.strategy
+      premises_key: proof.premises
+      output_key: formal.lean_candidate
+  - name: check
+    type: lean4_check
+    config:
+      input_key: formal.lean_candidate
+      output_key: formal.lean_result
+      project_root: ./lean/MathAgent
+      timeout_seconds: 120
+  - name: repair
+    type: lean4_repair
+    config:
+      candidate_key: formal.lean_candidate
+      error_key: formal.lean_result
+      output_key: formal.lean_candidate
+      max_repair_attempts: 3
+  - name: report
+    type: proof_report_builder
+    config: {input_key: math.parsed}
+flow:
+  type: graph
+  settings:
+    max_iterations: 3
+    on_max_iterations: exit
+    timeout_seconds: 300
+    fail_fast: false
+  nodes:
+    - {id: parse, component: parse}
+    - {id: sympy, component: sympy}
+    - {id: z3, component: z3}
+    - {id: planner, component: planner}
+    - {id: retrieve, component: retrieve}
+    - {id: formalize, component: formalize}
+    - {id: check, component: check}
+    - {id: repair, component: repair}
+    - {id: report, component: report}
+  edges:
+    - {source: parse, target: sympy}
+    - {source: parse, target: z3}
+    - {source: z3, target: report, port: counterexample_found}
+    - {source: sympy, target: planner}
+    - {source: z3, target: planner, port: no_counterexample}
+    - {source: planner, target: retrieve}
+    - {source: retrieve, target: formalize}
+    - {source: formalize, target: check}
+    - {source: check, target: report, port: verified}
+    - {source: check, target: repair, port: repair_needed}
+    - {source: repair, target: check, port: repaired}
+    - {source: check, target: report, port: failed}

@@ -1,0 +1,116 @@
+# math-proof-validation-worker — the full proof toolchain (design doc §5).
+#
+#   parse → classify → normalize
+#         → fan-out: sympy / sage / pari / gap / numeric / z3 / cvc5 / mace4
+#         → plan → retrieve premises
+#         → ATP: vampire / eprover / prover9
+#         → formalize in Lean → check (+ isabelle/coq checks) → repair loop
+#         → report
+#
+# Run:
+#   neurocore run blueprints/math-proof-validation-worker.flow.yaml \
+#     --data problem="<your statement>" --project-root <project-with-llm-config>
+#
+# ROUTING: with neurocore-ai>=0.4.0 (flowengine>=0.6.0), this graph routes through
+# flowengine's GraphExecutor, which honors edge ports/conditions and cyclic
+# max_iterations — so the early counterexample exits and the Lean repair loop
+# execute as drawn. Heavy backends degrade to status=tool_unavailable when not
+# installed (run `python -m neurocore_skill_math.check`). LLM skills need an
+# `llm:` provider configured in neurocore.yaml.
+name: math-proof-validation-worker
+version: "0.1.0"
+description: >
+  Explore, search for counterexamples, attempt proof search, formalize candidate
+  proofs, validate them with proof assistants, and emit a proof report.
+components:
+  - {name: parse, type: math_problem_parser, config: {input_key: problem, output_key: math.parsed}}
+  - {name: classify, type: math_domain_classifier, config: {input_key: math.parsed, output_key: math.domain}}
+  - {name: normalize, type: math_statement_normalizer, config: {input_key: math.parsed, domain_key: math.domain, output_key: math.normalized}}
+  - {name: sympy, type: sympy_simplify, config: {input_key: math.normalized, output_key: evidence.sympy, timeout_seconds: 15}}
+  - {name: sage, type: sagemath_compute, config: {input_key: math.normalized, output_key: evidence.sage, timeout_seconds: 60}}
+  - {name: pari, type: pari_gp_number_theory, config: {input_key: math.normalized, output_key: evidence.pari, timeout_seconds: 20}}
+  - {name: gap, type: gap_group_theory, config: {input_key: math.normalized, output_key: evidence.gap, timeout_seconds: 20}}
+  - {name: numeric, type: mpmath_high_precision_check, config: {input_key: math.normalized, output_key: evidence.numeric, precision_digits: 100, timeout_seconds: 20}}
+  - {name: z3, type: z3_smt_check, config: {input_key: math.normalized, output_key: counterexamples.z3, timeout_seconds: 20}}
+  - {name: cvc5, type: cvc5_smt_check, config: {input_key: math.normalized, output_key: counterexamples.cvc5, timeout_seconds: 20}}
+  - {name: mace4, type: mace4_countermodel, config: {input_key: math.normalized, output_key: counterexamples.mace4, timeout_seconds: 30, max_domain_size: 8}}
+  - {name: plan, type: llm_proof_planner, config: {input_key: math.normalized, output_key: proof.strategy}}
+  - {name: retrieve, type: theorem_retriever, config: {input_key: proof.strategy, output_key: proof.premises, backends: [lean_mathlib, isabelle_afp]}}
+  - {name: vampire, type: vampire_prove_tptp, config: {input_key: math.normalized, premises_key: proof.premises, output_key: proof.vampire, timeout_seconds: 30}}
+  - {name: eprover, type: eprover_prove_tptp, config: {input_key: math.normalized, premises_key: proof.premises, output_key: proof.eprover, timeout_seconds: 30}}
+  - {name: prover9, type: prover9_prove, config: {input_key: math.normalized, premises_key: proof.premises, output_key: proof.prover9, timeout_seconds: 30}}
+  - {name: lean_formalize, type: lean4_formalize_statement, config: {input_key: math.normalized, strategy_key: proof.strategy, premises_key: proof.premises, output_key: formal.lean_candidate}}
+  - {name: lean_check, type: lean4_check, config: {input_key: formal.lean_candidate, output_key: formal.lean_result, project_root: ./lean/MathAgent, timeout_seconds: 120}}
+  - {name: lean_repair, type: lean4_repair, config: {candidate_key: formal.lean_candidate, error_key: formal.lean_result, output_key: formal.lean_candidate, max_repair_attempts: 3}}
+  - {name: isabelle_check, type: isabelle_check_theory, config: {input_key: formal.isabelle_candidate, output_key: formal.isabelle_result, timeout_seconds: 180}}
+  - {name: coq_check, type: coq_check, config: {input_key: formal.coq_candidate, output_key: formal.coq_result, timeout_seconds: 180}}
+  - {name: report, type: proof_report_builder, config: {input_key: math.normalized}}
+flow:
+  type: graph
+  settings:
+    max_iterations: 4
+    on_max_iterations: exit
+    timeout_seconds: 600
+    fail_fast: false
+  nodes:
+    - {id: parse, component: parse}
+    - {id: classify, component: classify}
+    - {id: normalize, component: normalize}
+    - {id: sympy, component: sympy}
+    - {id: sage, component: sage}
+    - {id: pari, component: pari}
+    - {id: gap, component: gap}
+    - {id: numeric, component: numeric}
+    - {id: z3, component: z3}
+    - {id: cvc5, component: cvc5}
+    - {id: mace4, component: mace4}
+    - {id: plan, component: plan}
+    - {id: retrieve, component: retrieve}
+    - {id: vampire, component: vampire}
+    - {id: eprover, component: eprover}
+    - {id: prover9, component: prover9}
+    - {id: lean_formalize, component: lean_formalize}
+    - {id: lean_check, component: lean_check}
+    - {id: lean_repair, component: lean_repair}
+    - {id: isabelle_check, component: isabelle_check}
+    - {id: coq_check, component: coq_check}
+    - {id: report, component: report}
+  edges:
+    - {source: parse, target: classify}
+    - {source: classify, target: normalize}
+    # Exploration + counterexample fan-out.
+    - {source: normalize, target: sympy}
+    - {source: normalize, target: sage}
+    - {source: normalize, target: pari, port: number_theory}
+    - {source: normalize, target: gap, port: group_theory}
+    - {source: normalize, target: numeric}
+    - {source: normalize, target: z3}
+    - {source: normalize, target: cvc5}
+    - {source: normalize, target: mace4}
+    # Early refutation.
+    - {source: z3, target: report, port: counterexample_found}
+    - {source: cvc5, target: report, port: counterexample_found}
+    - {source: mace4, target: report, port: counterexample_found}
+    # Otherwise plan + retrieve.
+    - {source: sympy, target: plan}
+    - {source: numeric, target: plan}
+    - {source: z3, target: plan, port: no_counterexample}
+    - {source: plan, target: retrieve}
+    # ATP attempts.
+    - {source: retrieve, target: vampire}
+    - {source: retrieve, target: eprover}
+    - {source: retrieve, target: prover9}
+    # Formalization + validation.
+    - {source: vampire, target: lean_formalize, port: proof_found}
+    - {source: eprover, target: lean_formalize, port: proof_found}
+    - {source: prover9, target: lean_formalize, port: proof_found}
+    - {source: retrieve, target: lean_formalize}
+    - {source: lean_formalize, target: lean_check}
+    - {source: lean_formalize, target: isabelle_check}
+    - {source: lean_formalize, target: coq_check}
+    - {source: lean_check, target: report, port: verified}
+    - {source: lean_check, target: lean_repair, port: repair_needed}
+    - {source: lean_repair, target: lean_check, port: repaired}
+    - {source: lean_check, target: report, port: failed}
+    - {source: isabelle_check, target: report}
+    - {source: coq_check, target: report}
