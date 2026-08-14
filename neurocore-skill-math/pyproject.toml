@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neurocore-skill-math"
-version = "0.1.0"
+version = "0.2.0"
 description = "Math-proof toolchain skills for NeuroCore: CAS, SMT, ATP, and formal proof assistants"
 readme = "README.md"
 license = "Apache-2.0"
@@ -27,6 +27,16 @@ dependencies = [
     "mpmath>=1.3",
     "z3-solver>=4.12",
 ]
+
+[project.urls]
+Homepage = "https://github.com/alexh-scrt/neurocore-skills"
+Repository = "https://github.com/alexh-scrt/neurocore-skills"
+Documentation = "https://github.com/alexh-scrt/neurocore-skills/tree/main/neurocore-skill-math"
+"Bug Tracker" = "https://github.com/alexh-scrt/neurocore-skills/issues"
+
+[project.scripts]
+neurocore-skill-math-check = "neurocore_skill_math.check:main"
+
 
 [project.optional-dependencies]
 # Optional backends; the matching skills detect availability and degrade gracefully.
@@ -71,7 +81,7 @@ proof_report_builder = "neurocore_skill_math:ProofReportBuilderSkill"
 packages = ["src/neurocore_skill_math"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/neurocore_skill_math/", "tests/", "blueprints/", "scripts/", "README.md"]
+include = ["src/neurocore_skill_math/", "tests/", "blueprints/", "scripts/", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

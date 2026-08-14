@@ -159,3 +159,62 @@ class SympyCalculusSkill(_SympyBase):
             result={"operation": op, "input": str(expr), "variable": str(var),
                     "output": str(out), "latex": sympy.latex(out)},
         )
+
+
+class WolframAlphaQuerySkill(MathSkill):
+    default_input_key = "math.normalized"
+    default_output_key = "evidence.wolframalpha"
+    required_lib = "wolframalpha"
+    tool_name = "wolframalpha"
+
+    skill_meta = SkillMeta(
+        name="wolframalpha_query",
+        version="0.1.0",
+        description="Query WolframAlpha API for advanced symbolic computations and mathematical queries.",
+        author="NeuroCore Contributors",
+        provides=["evidence.wolframalpha"], consumes=["math.normalized"],
+        tags=["math", "symbolic", "wolframalpha", "query"],
+        config_schema={"properties": {
+            "input_key": {"type": "string"}, "output_key": {"type": "string"},
+            "appid": {"type": "string"},
+        }},
+    )
+
+    def is_available(self) -> bool:
+        from neurocore_skill_math._availability import lib_available
+        return lib_available("wolframalpha")
+
+    async def _compute(self, payload: Any, context: FlowContext) -> dict[str, Any]:
+        import os
+        import wolframalpha
+        
+        query = _expr_str(payload)
+        if not query:
+            return self.envelope(STATUS_ERROR, error="no query expression provided")
+            
+        appid = self.config.get("appid") or os.environ.get("WOLFRAM_ALPHA_APPID") or "DEMO-APPID"
+        try:
+            client = wolframalpha.Client(appid)
+            res = client.query(query)
+            
+            # Simple extraction of textual results
+            results = []
+            for pod in res.pods:
+                for sub in pod.subpods:
+                    if sub.plaintext:
+                        results.append({
+                            "title": pod.title,
+                            "text": sub.plaintext
+                        })
+                        
+            return self.envelope(
+                STATUS_OK,
+                result={"query": query, "results": results},
+                log=f"WolframAlpha query completed with {len(results)} pod results."
+            )
+        except Exception as e:
+            return self.envelope(
+                STATUS_ERROR,
+                error=f"WolframAlpha API query failed: {str(e)}"
+            )
+

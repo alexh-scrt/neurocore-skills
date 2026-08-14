@@ -16,7 +16,9 @@ are **not** Python packages — install them with the provided script
 (`scripts/install_math_tools.sh`, Ubuntu 24.04) and check what's available:
 
 ```bash
-python -m neurocore_skill_math.check      # prints a tool-availability report
+# Check using python module or the installed CLI script
+python -m neurocore_skill_math.check
+neurocore-skill-math-check
 ```
 
 Every skill **detects whether its backend is installed** and degrades gracefully

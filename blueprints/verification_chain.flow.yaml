@@ -1,0 +1,45 @@
+name: "verification-chain-flow"
+version: "1.0"
+description: "Test start -> arxiv -> researcher -> math_verifier -> reviewer -> judge -> end execution flow"
+components:
+  - name: flow-start
+    type: start
+    config:
+      validate_schema: true
+  - name: arxiv-search
+    type: arxiv
+    config:
+      max_results: 2
+  - name: unified-researcher
+    type: researcher
+    config:
+      tavily_api_key: "tavily_blueprint_key"
+      brave_api_key: "brave_blueprint_key"
+      default_max_results: 4
+  - name: SMT-verifier
+    type: math_verifier
+    config:
+      solver_backend: "z3"
+      timeout_ms: 2000
+  - name: peer-reviewer
+    type: reviewer
+    config:
+      review_depth: "adversarial"
+  - name: quality-judge
+    type: judge
+    config:
+      strictness: "high"
+  - name: flow-end
+    type: end
+    config:
+      format_output: "json"
+flow:
+  type: sequential
+  steps:
+    - component: flow-start
+    - component: arxiv-search
+    - component: unified-researcher
+    - component: SMT-verifier
+    - component: peer-reviewer
+    - component: quality-judge
+    - component: flow-end

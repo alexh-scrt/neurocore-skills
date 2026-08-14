@@ -142,3 +142,72 @@ class SagemathComputeSkill(MathSkill):
             return self.envelope(STATUS_TIMEOUT, error="sage timed out", log=res.stderr)
         return self.envelope(STATUS_OK, result={"output": res.stdout.strip()},
                              log=res.stderr.strip())
+
+
+class Macaulay2ComputeSkill(MathSkill):
+    default_input_key = "math.normalized"
+    default_output_key = "evidence.macaulay2"
+    required_tool = "M2"
+    tool_name = "macaulay2"
+
+    skill_meta = SkillMeta(
+        name="macaulay2_compute",
+        version="0.1.0",
+        description="Run Macaulay2 algebraic geometry and commutative algebra computations.",
+        author="NeuroCore Contributors",
+        provides=["evidence.macaulay2"],
+        consumes=["math.normalized"],
+        tags=["math", "algebraic-geometry", "cas", "macaulay2"],
+        config_schema={"properties": {
+            "input_key": {"type": "string"}, "output_key": {"type": "string"},
+            "timeout_seconds": {"type": "integer"},
+        }},
+    )
+
+    async def _compute(self, payload: Any, context: FlowContext) -> dict[str, Any]:
+        script = _script(payload, "macaulay2", "m2")
+        if not script:
+            return self.envelope(STATUS_ERROR, error="no Macaulay2 script provided")
+        # Run Macaulay2 in silent/stop mode
+        res = run_cli(["M2", "--no-readline", "--silent", "--stop"], stdin=script, timeout=self.timeout)
+        if res.timed_out:
+            return self.envelope(STATUS_TIMEOUT, error="M2 timed out", log=res.stderr)
+        return self.envelope(STATUS_OK, result={"output": res.stdout.strip()},
+                             log=res.stderr.strip())
+
+
+class JuliaOscarComputeSkill(MathSkill):
+    default_input_key = "math.normalized"
+    default_output_key = "evidence.oscar"
+    required_tool = "julia"
+    tool_name = "oscar"
+
+    skill_meta = SkillMeta(
+        name="julia_oscar_compute",
+        version="0.1.0",
+        description="Run unified computer algebra computations using Julia OSCAR.",
+        author="NeuroCore Contributors",
+        provides=["evidence.oscar"],
+        consumes=["math.normalized"],
+        tags=["math", "cas", "oscar", "julia"],
+        config_schema={"properties": {
+            "input_key": {"type": "string"}, "output_key": {"type": "string"},
+            "timeout_seconds": {"type": "integer"},
+        }},
+    )
+
+    async def _compute(self, payload: Any, context: FlowContext) -> dict[str, Any]:
+        script = _script(payload, "oscar", "julia")
+        if not script:
+            return self.envelope(STATUS_ERROR, error="no Julia/OSCAR script provided")
+        
+        # Ensure Oscar and HomotopyContinuation are loaded
+        full_code = f"using Oscar; using HomotopyContinuation;\n{script}"
+        
+        # Run julia script using stdin
+        res = run_cli(["julia", "--startup-file=no"], stdin=full_code, timeout=self.timeout)
+        if res.timed_out:
+            return self.envelope(STATUS_TIMEOUT, error="julia timed out", log=res.stderr)
+        return self.envelope(STATUS_OK, result={"output": res.stdout.strip()},
+                             log=res.stderr.strip())
+

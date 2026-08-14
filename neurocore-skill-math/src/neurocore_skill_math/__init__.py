@@ -14,6 +14,8 @@ from neurocore_skill_math.cas import (
     GapGroupTheorySkill,
     PariGpNumberTheorySkill,
     SagemathComputeSkill,
+    Macaulay2ComputeSkill,
+    JuliaOscarComputeSkill,
 )
 from neurocore_skill_math.formal import (
     CoqCheckSkill,
@@ -21,6 +23,7 @@ from neurocore_skill_math.formal import (
     Lean4CheckSkill,
     Lean4FormalizeStatementSkill,
     Lean4RepairSkill,
+    LeanDojoCheckSkill,
 )
 from neurocore_skill_math.numeric import MpmathHighPrecisionCheckSkill
 from neurocore_skill_math.planning import LlmProofPlannerSkill, TheoremRetrieverSkill
@@ -35,6 +38,7 @@ from neurocore_skill_math.symbolic import (
     SympyCalculusSkill,
     SympySimplifySkill,
     SympySolveSkill,
+    WolframAlphaQuerySkill,
 )
 
 __all__ = [
@@ -50,6 +54,9 @@ __all__ = [
     "SagemathComputeSkill",
     "PariGpNumberTheorySkill",
     "GapGroupTheorySkill",
+    "Macaulay2ComputeSkill",
+    "JuliaOscarComputeSkill",
+    "WolframAlphaQuerySkill",
     # Group 3 — counterexample / SMT
     "Z3SmtCheckSkill",
     "Cvc5SmtCheckSkill",
@@ -65,6 +72,7 @@ __all__ = [
     "Lean4FormalizeStatementSkill",
     "Lean4CheckSkill",
     "Lean4RepairSkill",
+    "LeanDojoCheckSkill",
     "IsabelleCheckTheorySkill",
     "CoqCheckSkill",
     # Group 6 — reporting

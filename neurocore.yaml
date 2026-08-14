@@ -1,0 +1,6 @@
+project:
+  name: neurocore-skills-repo
+
+llm:
+  provider: "ollama"
+  model: "deepseek-v4-flash:cloud"

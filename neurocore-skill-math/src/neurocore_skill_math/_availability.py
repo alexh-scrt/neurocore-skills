@@ -24,10 +24,12 @@ CLI_TOOLS: list[str] = [
     "lake",
     "isabelle",
     "coqc",
+    "M2",        # Macaulay2
+    "julia",     # Julia Language
 ]
 
 # Python libraries used directly by skills.
-PY_LIBS: list[str] = ["sympy", "mpmath", "z3", "cvc5", "numpy", "scipy", "networkx"]
+PY_LIBS: list[str] = ["sympy", "mpmath", "z3", "cvc5", "numpy", "scipy", "networkx", "lean_dojo_v2", "wolframalpha"]
 
 
 def tool_available(name: str) -> bool:

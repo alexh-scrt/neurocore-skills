@@ -21,6 +21,23 @@ neurocore run blueprints/research.flow.yaml
 | `neurocore-skill-postgres` | `postgres` | Run parameterized SQL against PostgreSQL |
 | `neurocore-skill-ollama`   | `ollama`   | Text generation via a local Ollama server |
 | `neurocore-skill-telegram` | `telegram` | Send Telegram messages from a flow |
+| `neurocore-skill-arxiv`    | `arxiv`    | Search arxiv.org for articles related to the topic of research |
+| `neurocore-skill-planner`  | `planner`  | Higher order aggregator skill that plans task execution via neurogossip-agent-v3 |
+| `neurocore-skill-math-verifier` | `math_verifier` | Verify mathematical expressions |
+| `neurocore-skill-reviewer` | `reviewer` | Conduct adversarial reviews |
+| `neurocore-skill-researcher` | `researcher` | Aggregated search and research skill that coordinates Tavily, Brave, and arXiv |
+| `neurocore-skill-writer`   | `writer`   | Generate content based on a specific task |
+
+| `neurocore-skill-judge`    | `judge`    | Determine if a task meets its quality criteria |
+| `neurocore-skill-fact-checker` | `fact_checker` | Check if claims and statements are true |
+| `neurocore-skill-human`    | `human`    | Human-in-the-loop approval and feedback skill |
+| `neurocore-skill-worker`   | `worker`   | Higher order aggregator skill that coordinates other tasks via YAML passed to it |
+
+| `neurocore-skill-start`    | `start`    | Start executing on higher order tasks based on YAML flow passed to it |
+| `neurocore-skill-end`      | `end`      | Stop execution and pass control back to the master agent |
+| `neurocore-skill-error`    | `error`    | Process execution flow errors |
+| `neurocore-skill-coordinator` | `coordinator` | Coordinate a high-level task by passing requests to other skills per high-order YAML flow |
+
 
 ## The skill package convention
 

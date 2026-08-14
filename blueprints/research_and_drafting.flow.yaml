@@ -1,0 +1,37 @@
+name: "research-and-drafting-flow"
+version: "1.0"
+description: "Tests arxiv, researcher, writer, and reviewer skills using real search API keys"
+components:
+  - name: flow-start
+    type: start
+    config:
+      validate_schema: true
+  - name: arxiv-search
+    type: arxiv
+    config:
+      max_results: 3
+  - name: unified-researcher
+    type: researcher
+    config:
+      default_max_results: 3
+  - name: draft-writer
+    type: writer
+    config:
+      temperature: 0.7
+  - name: peer-reviewer
+    type: reviewer
+    config:
+      review_depth: "adversarial"
+  - name: flow-end
+    type: end
+    config:
+      format_output: "markdown_report"
+flow:
+  type: sequential
+  steps:
+    - component: flow-start
+    - component: arxiv-search
+    - component: unified-researcher
+    - component: draft-writer
+    - component: peer-reviewer
+    - component: flow-end

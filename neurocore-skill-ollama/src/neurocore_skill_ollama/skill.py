@@ -1,26 +1,14 @@
-"""OllamaSkill — text generation via a local Ollama server.
-
-Reads ``prompt`` from context, writes the generated text to ``ollama_response``.
-
-Tip: for chat-style LLM access inside skills that set ``requires_llm=True``, use
-NeuroCore's built-in ``ollama`` provider instead. This skill is a direct,
-provider-free call to Ollama's ``/api/generate`` endpoint.
-"""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-
 from flowengine import FlowContext
-
 from neurocore import AsyncSkill, SkillMeta
 
 logger = logging.getLogger(__name__)
 
-
 class OllamaSkill(AsyncSkill):
-    """Async text generation against a local Ollama server."""
-
     skill_meta = SkillMeta(
         name="ollama",
         version="0.1.0",
@@ -32,14 +20,24 @@ class OllamaSkill(AsyncSkill):
         tags=["llm", "local", "generation"],
         max_retries=2,
         config_schema={
-            "required": ["model"],
             "properties": {
                 "base_url": {"type": "string"},
                 "model": {"type": "string"},
+                "ollama_llm": {"type": "string", "description": "Ollama LLM model name"},
                 "system": {"type": "string"},
-            },
-        },
+                "redis_url": {"type": "string"}
+            }
+        }
     )
+
+    def validate_config(self) -> list[str]:
+        errors = super().validate_config()
+        if "model" not in self.config and "ollama_llm" not in self.config:
+            errors.append("Missing required config key: 'model' or 'ollama_llm'")
+        return errors
+
+    def _model_name(self) -> str:
+        return self.config.get("ollama_llm") or self.config.get("model") or "llama3"
 
     def _base_url(self) -> str:
         return (
@@ -49,11 +47,9 @@ class OllamaSkill(AsyncSkill):
         ).rstrip("/")
 
     async def _generate(self, prompt: str) -> str:
-        """Call Ollama /api/generate and return the response text."""
         import httpx
-
         payload = {
-            "model": self.config["model"],
+            "model": self._model_name(),
             "prompt": prompt,
             "stream": False,
         }
@@ -64,15 +60,57 @@ class OllamaSkill(AsyncSkill):
             resp.raise_for_status()
             return str(resp.json().get("response", ""))
 
-    async def process(self, context: FlowContext) -> FlowContext:
-        prompt = str(context.get("prompt", ""))
-        if not prompt:
-            logger.warning("OllamaSkill: 'prompt' is empty.")
-            context.set("ollama_response", "")
-            return context
+    async def setup_gossip(self) -> None:
+        import redis.asyncio as aioredis
+        from neurogossip_agent.session_manager import AgentConversationManager
+        from neurogossip_agent.transport import RedisAgentTransport, MockAgentTransport
+        
+        redis_url = self.config.get("redis_url") or os.environ.get("NEUROGOSSIP_V3_REDIS_URL") or "redis://localhost:6379/0"
         try:
-            context.set("ollama_response", await self._generate(prompt))
-        except Exception as exc:  # noqa: BLE001
-            logger.error("OllamaSkill generation failed: %s", exc, exc_info=True)
-            context.set("ollama_response", {"error": str(exc)})
+            self.redis_client = aioredis.from_url(redis_url, decode_responses=True)
+            await self.redis_client.ping()
+            self.transport = RedisAgentTransport(agent_id=self.name, redis_url=redis_url)
+            self.manager = AgentConversationManager(self.redis_client, self.transport)
+        except Exception:
+            self.redis_client = None
+            self.transport = MockAgentTransport()
+            self.manager = AgentConversationManager(None, self.transport)
+        
+        self.manager.register_handler(self._handle_gossip_message)
+        await self.transport.connect()
+        await self.manager.start_listening()
+
+    async def teardown_gossip(self) -> None:
+        if hasattr(self, "manager") and self.manager:
+            await self.manager.stop_listening()
+        if hasattr(self, "transport") and self.transport:
+            await self.transport.disconnect()
+        if hasattr(self, "redis_client") and self.redis_client:
+            await self.redis_client.aclose()
+
+    async def _handle_gossip_message(self, context, message_id, reply_to, tags, sender_id, payload) -> None:
+        if "request" in tags:
+            prompt = str(payload)
+            logger.info("Ollama received gossip request: %s", prompt)
+            try:
+                response = await self._generate(prompt)
+                await self.manager.send_response(request_id=message_id, sender_id=self.name, payload=response)
+            except Exception as e:
+                logger.error("Gossip generation failed: %s", e)
+                await self.manager.send_response(request_id=message_id, sender_id=self.name, payload={"error": str(e)})
+
+    async def process(self, context: FlowContext) -> FlowContext:
+        await self.setup_gossip()
+        prompt = str(context.get("prompt", ""))
+        if prompt:
+            try:
+                context.set("ollama_response", await self._generate(prompt))
+            except Exception as exc:
+                logger.error("OllamaSkill generation failed: %s", exc, exc_info=True)
+                context.set("ollama_response", {"error": str(exc)})
+        else:
+            context.set("ollama_response", "")
+
+        await asyncio.sleep(0.05)
+        await self.teardown_gossip()
         return context

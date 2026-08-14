@@ -1,0 +1,159 @@
+name: "planning-and-execution-integration-flow"
+version: "1.0"
+description: "Advanced graph blueprint testing planning loop and execution loop concurrently with SMT solvers and LLMs"
+components:
+  - name: flow-start
+    type: start
+    config:
+      validate_schema: true
+  - name: task-coordinator
+    type: coordinator
+    config:
+      persistence_root: "./data/runs"
+      enable_human_checkpoints: false
+  - name: task-planner
+    type: planner
+    config:
+      temperature: 0.7
+  - name: planning-researcher
+    type: researcher
+    config:
+      default_max_results: 2
+  - name: planning-writer
+    type: writer
+    config:
+      temperature: 0.7
+  - name: planning-reviewer
+    type: reviewer
+    config:
+      review_depth: "normal"
+  - name: planning-judge
+    type: judge
+    config:
+      strictness: "normal"
+  - name: step-worker
+    type: worker
+    config:
+      worker_model: "deepseek-v4-flash:cloud"
+      persistence_root: "./data/runs/artifacts"
+  - name: execution-researcher
+    type: researcher
+    config:
+      default_max_results: 2
+  - name: execution-writer
+    type: writer
+    config:
+      temperature: 0.5
+  - name: execution-verifier
+    type: math_verifier
+    config:
+      solver_backend: "z3"
+      timeout_ms: 3000
+  - name: execution-reviewer
+    type: reviewer
+    config:
+      review_depth: "adversarial"
+  - name: execution-judge
+    type: judge
+    config:
+      strictness: "high"
+  - name: flow-end
+    type: end
+    config:
+      format_output: "markdown_report"
+flow:
+  type: graph
+  nodes:
+    - id: flow-start
+      component: flow-start
+    - id: task-coordinator
+      component: task-coordinator
+    - id: task-planner
+      component: task-planner
+    - id: planning-researcher
+      component: planning-researcher
+    - id: planning-writer
+      component: planning-writer
+    - id: planning-reviewer
+      component: planning-reviewer
+    - id: planning-judge
+      component: planning-judge
+    - id: step-worker
+      component: step-worker
+    - id: execution-researcher
+      component: execution-researcher
+    - id: execution-writer
+      component: execution-writer
+    - id: execution-verifier
+      component: execution-verifier
+    - id: execution-reviewer
+      component: execution-reviewer
+    - id: execution-judge
+      component: execution-judge
+    - id: flow-end
+      component: flow-end
+  edges:
+    # 1. Start to coordinator
+    - source: flow-start
+      target: task-coordinator
+
+    # 2. Coordinator routing
+    - source: task-coordinator
+      target: task-planner
+      condition: "context.data.task_plan == None"
+    - source: task-coordinator
+      target: step-worker
+      condition: "context.data.task_plan != None and context.data.flow_completed != True"
+    - source: task-coordinator
+      target: flow-end
+      condition: "context.data.flow_completed == True"
+
+    # 3. Planner routing
+    - source: task-planner
+      target: planning-researcher
+      condition: "context.data.task_plan == None"
+    - source: task-planner
+      target: task-coordinator
+      condition: "context.data.task_plan != None"
+
+    # 4. Planning cycle
+    - source: planning-researcher
+      target: planning-writer
+    - source: planning-writer
+      target: planning-reviewer
+    - source: planning-reviewer
+      target: planning-judge
+    - source: planning-judge
+      target: task-planner
+      condition: "context.data.judge_evaluation != None and context.data.judge_evaluation.approved == True"
+    - source: planning-judge
+      target: planning-writer
+      condition: "context.data.judge_evaluation != None and context.data.judge_evaluation.approved == False"
+
+    # 5. Worker routing
+    - source: step-worker
+      target: task-coordinator
+      condition: "context.data.judge_evaluation != None and context.data.judge_evaluation.approved == True"
+    - source: step-worker
+      target: execution-researcher
+      condition: "context.data.judge_evaluation == None or context.data.judge_evaluation.approved == False"
+
+    # 6. Execution cycle
+    - source: execution-researcher
+      target: execution-writer
+    - source: execution-writer
+      target: execution-verifier
+    - source: execution-verifier
+      target: execution-reviewer
+      condition: "context.data.math_verification_result != None and context.data.math_verification_result.verified == True"
+    - source: execution-verifier
+      target: execution-writer
+      condition: "context.data.math_verification_result != None and context.data.math_verification_result.verified == False"
+    - source: execution-reviewer
+      target: execution-judge
+    - source: execution-judge
+      target: step-worker
+      condition: "context.data.judge_evaluation != None and context.data.judge_evaluation.approved == True"
+    - source: execution-judge
+      target: execution-writer
+      condition: "context.data.judge_evaluation != None and context.data.judge_evaluation.approved == False"

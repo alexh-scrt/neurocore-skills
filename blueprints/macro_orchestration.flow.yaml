@@ -1,0 +1,16 @@
+name: "macro-orchestration-flow"
+version: "1.0"
+description: "Test start -> coordinator -> end execution flow"
+components:
+  - name: flow-start
+    type: start
+  - name: task-coordinator
+    type: coordinator
+  - name: flow-end
+    type: end
+flow:
+  type: sequential
+  steps:
+    - component: flow-start
+    - component: task-coordinator
+    - component: flow-end

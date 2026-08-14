@@ -1,0 +1,39 @@
+name: "math-proving-and-validation-flow"
+version: "1.0"
+description: "Tests SMT verification, fact checking, human approval, and quality judging"
+components:
+  - name: flow-start
+    type: start
+    config:
+      validate_schema: true
+  - name: SMT-verifier
+    type: math_verifier
+    config:
+      solver_backend: "z3"
+      timeout_ms: 3000
+  - name: logic-fact-checker
+    type: fact_checker
+    config:
+      depth: "thorough"
+  - name: supervisor-approval
+    type: human
+    config:
+      checkpoint_type: "auto_approve"
+      timeout_seconds: 60
+  - name: final-quality-judge
+    type: judge
+    config:
+      strictness: "high"
+  - name: flow-end
+    type: end
+    config:
+      format_output: "raw"
+flow:
+  type: sequential
+  steps:
+    - component: flow-start
+    - component: SMT-verifier
+    - component: logic-fact-checker
+    - component: supervisor-approval
+    - component: final-quality-judge
+    - component: flow-end

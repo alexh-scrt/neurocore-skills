@@ -1,0 +1,35 @@
+name: "coordinator-worker-loop-flow"
+version: "1.0"
+description: "Tests coordinator planning, worker execution, and error reporting/telemetry"
+components:
+  - name: flow-start
+    type: start
+    config:
+      validate_schema: true
+  - name: task-coordinator
+    type: coordinator
+    config:
+      persistence_root: "./data/runs"
+      enable_human_checkpoints: false
+  - name: step-worker
+    type: worker
+    config:
+      worker_model: "mock-worker"
+      persistence_root: "./data/runs/artifacts"
+  - name: telemetry-error
+    type: error
+    config:
+      notify_on_failure: true
+      alert_channel: "slack-notifications"
+  - name: flow-end
+    type: end
+    config:
+      format_output: "json"
+flow:
+  type: sequential
+  steps:
+    - component: flow-start
+    - component: task-coordinator
+    - component: step-worker
+    - component: telemetry-error
+    - component: flow-end
